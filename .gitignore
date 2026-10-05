@@ -1,0 +1,11 @@
+.env
+.env.*
+*.key
+*.pem
+*.crt
+id_rsa*
+credentials.json
+node_modules/
+.venv/
+__pycache__/
+*.log

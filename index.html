@@ -1,0 +1,340 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
+<title>BitNet b1.58 Chat</title>
+<style>
+  :root {
+    --bg: #0f1116;
+    --panel: #171a23;
+    --panel2: #1f232e;
+    --fg: #e6e8ee;
+    --fg-dim: #8b93a7;
+    --accent: #6ea8fe;
+    --user: #253447;
+    --bot: #1c2230;
+    --border: #262b38;
+  }
+  * { box-sizing: border-box; }
+  html { height: 100%; }
+  body {
+    /* dvh = dynamic viewport height → mengecil saat keyboard muncul */
+    height: 100dvh;
+    min-height: 100dvh;
+    margin: 0;
+    background: var(--bg);
+    color: var(--fg);
+    font: 15px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    display: flex; flex-direction: column;
+    overscroll-behavior: none;
+  }
+  /* Fallback untuk browser lama yang belum support dvh */
+  @supports not (height: 100dvh) {
+    body { height: 100vh; min-height: 100vh; }
+  }
+
+  /* ---------- Header ---------- */
+  header {
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--border);
+    background: var(--panel);
+    display: flex; flex-direction: column; gap: 2px;
+    flex-shrink: 0;
+  }
+  .head-row {
+    display: flex; align-items: baseline; gap: 10px;
+    justify-content: space-between;
+  }
+  header h1 {
+    font-size: 15px; font-weight: 600; margin: 0;
+    letter-spacing: 0.02em;
+  }
+  #status-size {
+    font-size: 13px; font-weight: 600;
+    color: var(--accent);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+  #status-info {
+    font-size: 11.5px; color: var(--fg-dim);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+
+  /* ---------- Chat ---------- */
+  main {
+    flex: 1; overflow-y: auto;
+    padding: 14px 12px 8px;
+    display: flex; flex-direction: column; gap: 10px;
+    max-width: 900px; width: 100%; margin: 0 auto;
+    -webkit-overflow-scrolling: touch;
+    min-height: 0;   /* penting: biar flex child bisa shrink */
+  }
+  .msg {
+    padding: 9px 13px; border-radius: 12px;
+    white-space: pre-wrap; word-wrap: break-word;
+    max-width: 88%;
+    border: 1px solid var(--border);
+    font-size: 14.5px;
+  }
+  .msg.user {
+    background: var(--user); align-self: flex-end;
+    border-color: #2c4a6e;
+    border-bottom-right-radius: 4px;
+  }
+  .msg.bot {
+    background: var(--bot); align-self: flex-start;
+    border-bottom-left-radius: 4px;
+  }
+  .msg.bot.thinking { padding: 12px 16px; min-width: 56px; }
+  .dots { display: inline-flex; gap: 5px; align-items: center; }
+  .dots span {
+    width: 7px; height: 7px; border-radius: 50%;
+    background: var(--fg-dim);
+    animation: dotPulse 1.2s ease-in-out infinite;
+  }
+  .dots span:nth-child(2) { animation-delay: 0.15s; }
+  .dots span:nth-child(3) { animation-delay: 0.30s; }
+  @keyframes dotPulse {
+    0%, 60%, 100% { opacity: 0.25; transform: translateY(0); }
+    30%           { opacity: 1;    transform: translateY(-3px); }
+  }
+
+  /* ---------- Skeleton ---------- */
+  #skeleton { display: flex; flex-direction: column; gap: 10px; }
+  .sk-msg {
+    padding: 11px 13px; border-radius: 12px;
+    background: var(--bot);
+    border: 1px solid var(--border);
+    max-width: 78%;
+    display: flex; flex-direction: column; gap: 7px;
+  }
+  .sk-msg.user {
+    background: var(--user); align-self: flex-end;
+    border-color: #2c4a6e; max-width: 55%;
+  }
+  .sk-line {
+    height: 11px; border-radius: 6px;
+    background: linear-gradient(90deg,
+      #232838 0%, #2c3244 50%, #232838 100%);
+    background-size: 200% 100%;
+    animation: shimmer 1.4s linear infinite;
+  }
+  .sk-line.w40 { width: 40%; }
+  .sk-line.w60 { width: 60%; }
+  .sk-line.w80 { width: 80%; }
+  @keyframes shimmer {
+    0%   { background-position:  200% 0; }
+    100% { background-position: -200% 0; }
+  }
+
+  /* ---------- Footer: params DI ATAS input ---------- */
+  footer {
+    border-top: 1px solid var(--border);
+    background: var(--panel);
+    padding: 6px 12px 8px;   /* ← padding bawah tipis, gap keyboard hilang */
+    max-width: 900px; width: 100%; margin: 0 auto;
+    flex-shrink: 0;
+    padding-bottom: calc(8px + env(safe-area-inset-bottom, 0px));
+  }
+  /* Saat keyboard muncul, safe-area diabaikan (biasanya inset = 0 di iOS saat keyboard up) */
+  .params {
+    display: flex; gap: 6px;
+    align-items: center;
+    font-size: 11.5px;
+    color: var(--fg-dim);
+    overflow-x: auto;
+    scrollbar-width: none;
+    margin-bottom: 6px;      /* jarak params ke input */
+    padding-bottom: 2px;
+  }
+  .params::-webkit-scrollbar { display: none; }
+  .param {
+    display: inline-flex; align-items: center; gap: 5px;
+    background: var(--panel2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 4px 8px;
+    flex-shrink: 0;
+  }
+  .param span { user-select: none; }
+  .param input {
+    background: transparent; color: var(--fg);
+    border: none; outline: none;
+    width: 42px; font-size: 12px;
+    font-variant-numeric: tabular-nums;
+    padding: 0;
+    text-align: right;
+  }
+  .param input::-webkit-outer-spin-button,
+  .param input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+  .param input[type=number] { -moz-appearance: textfield; }
+
+  .input-row {
+    display: flex; gap: 8px; align-items: flex-end;
+  }
+  textarea {
+    flex: 1; resize: none; min-height: 40px; max-height: 120px;
+    background: var(--panel2); color: var(--fg);
+    border: 1px solid var(--border); border-radius: 10px;
+    padding: 10px 12px; font: inherit; font-size: 14.5px;
+    line-height: 1.4;
+    overflow-y: auto;
+  }
+  textarea:focus { outline: none; border-color: var(--accent); }
+  #send {
+    background: var(--accent); color: #0f1116;
+    border: none; border-radius: 10px;
+    padding: 10px 16px; font: inherit; font-size: 14px;
+    font-weight: 600; cursor: pointer;
+    height: 40px;
+    flex-shrink: 0;
+  }
+  #send:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  /* ---------- Loader overlay ---------- */
+  #loader {
+    position: fixed; inset: 0; z-index: 100;
+    background: rgba(15, 17, 22, 0.92);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    display: flex; align-items: center; justify-content: center;
+    transition: opacity 0.45s ease, visibility 0.45s ease;
+  }
+  #loader.hidden { opacity: 0; visibility: hidden; pointer-events: none; }
+  .loader-card {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 26px 26px 22px;
+    width: min(400px, 88vw);
+    text-align: center;
+    box-shadow: 0 24px 70px rgba(0, 0, 0, 0.55),
+                inset 0 1px 0 rgba(255, 255, 255, 0.03);
+  }
+  .loader-brand {
+    display: flex; align-items: center; justify-content: center;
+    gap: 10px; margin-bottom: 20px;
+  }
+  .loader-logo {
+    width: 32px; height: 32px; border-radius: 9px;
+    background: linear-gradient(135deg, #4a7fff, #6ea8fe);
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 700; font-size: 14px; color: #0f1116;
+    box-shadow: 0 6px 20px rgba(110, 168, 254, 0.35);
+    flex-shrink: 0;
+  }
+  .loader-title { font-size: 16px; font-weight: 600; letter-spacing: 0.02em; }
+  .loader-sub { font-size: 11.5px; color: var(--fg-dim); margin-top: 1px; }
+  .loader-bar {
+    height: 6px; background: var(--panel2);
+    border-radius: 999px; overflow: hidden;
+    margin: 4px 0 10px;
+  }
+  .loader-fill {
+    height: 100%; width: 0%;
+    background: linear-gradient(90deg, #4a7fff, #6ea8fe);
+    border-radius: 999px;
+    transition: width 0.18s ease-out;
+  }
+  .loader-meta {
+    display: flex; justify-content: space-between;
+    font-size: 11.5px; color: var(--fg-dim);
+    font-variant-numeric: tabular-nums;
+    gap: 8px;
+  }
+  #loader-stage { text-align: left; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  #loader-pct   { text-align: right; font-weight: 600; color: var(--fg); flex-shrink: 0; }
+
+  /* ---------- Mobile tweaks ---------- */
+  @media (max-width: 480px) {
+    header { padding: 9px 12px; }
+    header h1 { font-size: 14px; }
+    #status-size { font-size: 12.5px; }
+    #status-info { font-size: 11px; }
+    main { padding: 12px 10px 6px; }
+    .msg { font-size: 14px; padding: 8px 12px; max-width: 92%; }
+    footer {
+      padding: 6px 10px 6px;
+      padding-bottom: calc(6px + env(safe-area-inset-bottom, 0px));
+    }
+    #send { padding: 10px 14px; font-size: 13.5px; }
+    textarea { font-size: 14px; }
+    .params { margin-bottom: 5px; }
+  }
+</style>
+</head>
+<body>
+  <!-- Loading overlay -->
+  <div id="loader">
+    <div class="loader-card">
+      <div class="loader-brand">
+        <div class="loader-logo">B1</div>
+        <div style="text-align:left">
+          <div class="loader-title">BitNet b1.58</div>
+          <div class="loader-sub">ternary · browser inference</div>
+        </div>
+      </div>
+      <div class="loader-bar"><div class="loader-fill" id="loader-fill"></div></div>
+      <div class="loader-meta">
+        <span id="loader-stage">Menyiapkan…</span>
+        <span id="loader-pct">0%</span>
+      </div>
+    </div>
+  </div>
+
+  <header>
+    <div class="head-row">
+      <h1>BitNet b1.58</h1>
+      <span id="status-size">—</span>
+    </div>
+    <div id="status-info">Initializing…</div>
+  </header>
+
+  <main id="history">
+    <div id="skeleton">
+      <div class="sk-msg">
+        <div class="sk-line w60"></div>
+        <div class="sk-line w80"></div>
+        <div class="sk-line w40"></div>
+      </div>
+      <div class="sk-msg user">
+        <div class="sk-line w40"></div>
+      </div>
+      <div class="sk-msg">
+        <div class="sk-line w80"></div>
+        <div class="sk-line w60"></div>
+      </div>
+    </div>
+  </main>
+
+  <footer>
+    <!-- params DI ATAS input -->
+    <div class="params">
+      <label class="param">
+        <span>temp</span>
+        <input id="temperature" type="number" value="0.7" step="0.1" min="0.1" max="2">
+      </label>
+      <label class="param">
+        <span>top-k</span>
+        <input id="topk" type="number" value="40" min="0" max="4096">
+      </label>
+      <label class="param">
+        <span>max</span>
+        <input id="maxtok" type="number" value="128" min="16" max="1024">
+      </label>
+    </div>
+    <!-- input DI BAWAH params -->
+    <div class="input-row">
+      <textarea id="input" rows="1" placeholder="Type a message…" disabled></textarea>
+      <button id="send" disabled>Send</button>
+    </div>
+  </footer>
+
+  <script type="module">
+    import { boot } from "./chat.js";
+    boot();
+  </script>
+</body>
+</html>
